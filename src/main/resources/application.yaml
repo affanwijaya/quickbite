@@ -5,6 +5,14 @@ server:
 spring:
   application:
     name: ordering-system
+  web:
+    resources:
+      cache:
+        # File di dalam .jar selalu bertanggal 1980, sehingga browser mengira file tidak pernah berubah.
+        # Matikan Last-Modified dan minta browser selalu mengecek ulang agar tampilan terbaru selalu dipakai.
+        use-last-modified: false
+        cachecontrol:
+          no-cache: true
   datasource:
     # Urutan prioritas: DB_* (manual) -> PG* (otomatis dari Neon di Vercel) -> default PostgreSQL Docker lokal
     url: ${DB_URL:jdbc:postgresql://${PGHOST_UNPOOLED:localhost}:5432/${PGDATABASE:ordering_db}?sslmode=${DB_SSLMODE:prefer}}

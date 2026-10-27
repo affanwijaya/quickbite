@@ -1,0 +1,11 @@
+target/
+.idea/
+.vscode/
+.agents/
+.claude/
+.env*
+postman/
+.postman/
+skills-lock.json
+*.iml
+.DS_Store

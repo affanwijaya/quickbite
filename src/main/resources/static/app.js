@@ -5,23 +5,42 @@
 //   POST /api/checkout/{id}/batal     -> batalkan pesanan
 // =====================================================
 
-// Kalau halaman dibuka dari backend (http://localhost:8080) pakai alamat relatif.
+// Kalau halaman dibuka dari backend (http://localhost:8080 atau domain online) pakai alamat relatif.
 // Kalau dibuka langsung dari file / Live Server / preview IntelliJ, arahkan ke backend di port 8080.
-const BASE_URL = window.location.port === "8080" ? "" : "http://localhost:8080";
+const DIBUKA_DARI_BACKEND = window.location.protocol.startsWith("http") && window.location.port !== "5500" && window.location.port !== "63342";
+const BASE_URL = DIBUKA_DARI_BACKEND ? "" : "http://localhost:8080";
 const API_URL = BASE_URL + "/api/checkout";
 
 // Data menu disamakan dengan data seeder di database (tabel menu).
 // Backend belum punya endpoint untuk mengambil daftar menu, jadi ditulis di sini.
 const daftarMenu = [
-    { idMenu: "MENU-01", nama: "Kopi Susu Gula Aren", harga: 18000 },
-    { idMenu: "MENU-02", nama: "Croissant Butter", harga: 25000 }
+    {
+        idMenu: "MENU-01",
+        nama: "Kopi Susu Gula Aren",
+        harga: 18000,
+        ikon: "☕",
+        deskripsi: "Espresso, susu segar, dan gula aren asli. Manisnya pas untuk menemani harimu."
+    },
+    {
+        idMenu: "MENU-02",
+        nama: "Croissant Butter",
+        harga: 25000,
+        ikon: "🥐",
+        deskripsi: "Renyah di luar, lembut berlapis di dalam, dipanggang dengan butter premium."
+    }
 ];
 
 // Isi keranjang: { "MENU-01": 2, "MENU-02": 1 }
 let keranjang = {};
 
+// Metode pembayaran yang dipilih
+let metodePembayaran = "MIDTRANS";
+
 // Riwayat pesanan yang dibuat selama halaman dibuka
 let riwayat = [];
+
+// ID pesanan yang sedang akan dibatalkan (dipakai oleh popup)
+let idYangDibatalkan = null;
 
 // ---------- Fungsi bantu ----------
 
@@ -30,7 +49,7 @@ function formatRupiah(angka) {
 }
 
 function formatTanggal(teks) {
-    return new Date(teks).toLocaleString("id-ID");
+    return new Date(teks).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
 }
 
 function cariMenu(idMenu) {
@@ -39,23 +58,42 @@ function cariMenu(idMenu) {
     });
 }
 
+function jumlahItemKeranjang() {
+    let jumlah = 0;
+    for (const idMenu in keranjang) {
+        jumlah = jumlah + keranjang[idMenu];
+    }
+    return jumlah;
+}
+
 // ---------- Tampilkan daftar menu ----------
 
 function tampilkanMenu() {
     const wadah = document.getElementById("daftar-menu");
     wadah.innerHTML = "";
 
-    daftarMenu.forEach(function (menu) {
-        const div = document.createElement("div");
-        div.className = "menu-item";
-        div.innerHTML =
-            "<div>" +
-            "  <h3>" + menu.nama + "</h3>" +
-            "  <p>" + formatRupiah(menu.harga) + "</p>" +
-            "  <small>" + menu.idMenu + "</small>" +
-            "</div>" +
-            "<button onclick=\"tambahKeKeranjang('" + menu.idMenu + "')\">+ Tambah</button>";
-        wadah.appendChild(div);
+    daftarMenu.forEach(function (menu, index) {
+        const qty = keranjang[menu.idMenu] || 0;
+        let infoKeranjang = "";
+        if (qty > 0) {
+            infoKeranjang = "<span class='di-keranjang'>" + qty + " di keranjang</span>";
+        }
+
+        const kartu = document.createElement("div");
+        // Kartu kedua dibuat gelap sebagai aksen
+        kartu.className = index % 2 === 1 ? "menu-card gelap" : "menu-card";
+        kartu.innerHTML =
+            "<div class='menu-icon'>" + menu.ikon + "</div>" +
+            "<h3>" + menu.nama + "</h3>" +
+            "<p class='deskripsi'>" + menu.deskripsi + "</p>" +
+            "<div class='menu-bawah'>" +
+            "  <div>" +
+            "    <div class='harga'>" + formatRupiah(menu.harga) + "</div>" +
+            "    " + infoKeranjang +
+            "  </div>" +
+            "  <button class='btn-tambah' onclick=\"tambahKeKeranjang('" + menu.idMenu + "')\">+ Tambah</button>" +
+            "</div>";
+        wadah.appendChild(kartu);
     });
 }
 
@@ -67,7 +105,7 @@ function tambahKeKeranjang(idMenu) {
     } else {
         keranjang[idMenu] = 1;
     }
-    tampilkanKeranjang();
+    perbaruiTampilan();
 }
 
 function kurangiDariKeranjang(idMenu) {
@@ -75,7 +113,13 @@ function kurangiDariKeranjang(idMenu) {
     if (keranjang[idMenu] <= 0) {
         delete keranjang[idMenu];
     }
-    tampilkanKeranjang();
+    perbaruiTampilan();
+}
+
+function kosongkanKeranjang() {
+    keranjang = {};
+    document.getElementById("pesan").innerHTML = "";
+    perbaruiTampilan();
 }
 
 function tampilkanKeranjang() {
@@ -84,7 +128,7 @@ function tampilkanKeranjang() {
     let total = 0;
 
     if (daftarId.length === 0) {
-        wadah.innerHTML = '<p class="kosong">Keranjang masih kosong.</p>';
+        wadah.innerHTML = '<p class="kosong">Keranjang masih kosong. Tambahkan menu dulu, ya.</p>';
         document.getElementById("total").textContent = formatRupiah(0);
         return;
     }
@@ -96,28 +140,56 @@ function tampilkanKeranjang() {
         const subtotal = menu.harga * qty;
         total = total + subtotal;
 
-        const div = document.createElement("div");
-        div.className = "item-keranjang";
-        div.innerHTML =
+        const baris = document.createElement("div");
+        baris.className = "item-keranjang";
+        baris.innerHTML =
             "<div>" +
-            "  <b>" + menu.nama + "</b><br>" +
-            "  <small>" + formatRupiah(menu.harga) + " x " + qty + " = " + formatRupiah(subtotal) + "</small>" +
+            "  <b>" + menu.ikon + " " + menu.nama + "</b><br>" +
+            "  <small>" + formatRupiah(menu.harga) + " × " + qty + " = " + formatRupiah(subtotal) + "</small>" +
             "</div>" +
             "<div class='qty'>" +
-            "  <button onclick=\"kurangiDariKeranjang('" + idMenu + "')\">-</button>" +
+            "  <button type='button' onclick=\"kurangiDariKeranjang('" + idMenu + "')\">−</button>" +
             "  <span>" + qty + "</span>" +
-            "  <button onclick=\"tambahKeKeranjang('" + idMenu + "')\">+</button>" +
+            "  <button type='button' onclick=\"tambahKeKeranjang('" + idMenu + "')\">+</button>" +
             "</div>";
-        wadah.appendChild(div);
+        wadah.appendChild(baris);
     });
 
     document.getElementById("total").textContent = formatRupiah(total);
 }
 
+// Progress bar: langkah 1 = pilih menu, langkah 2 = isi pembayaran
+function tampilkanProgress() {
+    const adaIsi = jumlahItemKeranjang() > 0;
+    document.getElementById("progress-bar").style.width = adaIsi ? "100%" : "50%";
+    document.getElementById("step-text").textContent = adaIsi ? "Langkah 2 dari 2 · Pembayaran" : "Langkah 1 dari 2 · Pilih menu";
+    document.getElementById("badge-keranjang").textContent = jumlahItemKeranjang();
+}
+
+function perbaruiTampilan() {
+    tampilkanMenu();
+    tampilkanKeranjang();
+    tampilkanProgress();
+}
+
+// ---------- Pilihan metode pembayaran ----------
+
+function pilihMetode(event) {
+    const tombol = event.target.closest(".pill");
+    if (!tombol) {
+        return;
+    }
+    document.querySelectorAll("#pilihan-metode .pill").forEach(function (pill) {
+        pill.classList.remove("aktif");
+    });
+    tombol.classList.add("aktif");
+    metodePembayaran = tombol.dataset.metode;
+}
+
 // ---------- Pesan sukses / error ----------
 
 function tampilkanSukses(html) {
-    document.getElementById("pesan").innerHTML = '<div class="sukses">' + html + "</div>";
+    document.getElementById("pesan").innerHTML = '<div class="alert alert-sukses">' + html + "</div>";
 }
 
 function tampilkanError(hasil) {
@@ -132,7 +204,7 @@ function tampilkanError(hasil) {
         html += "</ul>";
     }
 
-    document.getElementById("pesan").innerHTML = '<div class="error">' + html + "</div>";
+    document.getElementById("pesan").innerHTML = '<div class="alert alert-error">' + html + "</div>";
 }
 
 // ---------- Checkout ----------
@@ -150,7 +222,7 @@ async function prosesCheckout(event) {
     const dataRequest = {
         idPelanggan: document.getElementById("idPelanggan").value,
         tokenKartu: document.getElementById("tokenKartu").value,
-        metodePembayaran: document.getElementById("metodePembayaran").value,
+        metodePembayaran: metodePembayaran,
         keranjang: daftarId.map(function (idMenu) {
             return { idMenu: idMenu, qty: keranjang[idMenu] };
         })
@@ -171,10 +243,9 @@ async function prosesCheckout(event) {
         if (response.ok) {
             const data = hasil.data;
             tampilkanSukses(
-                "<p><b>" + hasil.message + "</b></p>" +
+                "<p><b>🎉 " + hasil.message + "</b></p>" +
                 "<p>ID Pesanan: " + data.idPesanan + "</p>" +
                 "<p>Total Bayar: " + formatRupiah(data.total) + "</p>" +
-                "<p>Status: " + data.statusPesanan + " (pembayaran " + data.statusPembayaran + ")</p>" +
                 "<p>Kode Referensi: " + data.kodeReferensi + "</p>"
             );
             riwayat.unshift(data);
@@ -182,7 +253,7 @@ async function prosesCheckout(event) {
 
             // Kosongkan keranjang setelah berhasil
             keranjang = {};
-            tampilkanKeranjang();
+            perbaruiTampilan();
         } else {
             tampilkanError(hasil);
         }
@@ -197,37 +268,46 @@ async function prosesCheckout(event) {
 // ---------- Riwayat & pembatalan ----------
 
 function tampilkanRiwayat() {
-    const tabel = document.getElementById("tabel-riwayat");
-    const isi = document.getElementById("isi-riwayat");
-
+    const wadah = document.getElementById("isi-riwayat");
     document.getElementById("riwayat-kosong").hidden = riwayat.length > 0;
-    tabel.hidden = riwayat.length === 0;
-    isi.innerHTML = "";
+    wadah.innerHTML = "";
 
     riwayat.forEach(function (pesanan) {
-        let tombolBatal = "-";
+        let tombolBatal = "";
         if (pesanan.statusPesanan === "DIPROSES") {
-            tombolBatal = "<button class='btn-batal' onclick=\"batalkanPesanan('" + pesanan.idPesanan + "')\">Batalkan</button>";
+            tombolBatal = "<button class='btn btn-dark btn-small' onclick=\"bukaDialogBatal('" + pesanan.idPesanan + "')\">Batalkan</button>";
         }
 
-        const baris = document.createElement("tr");
-        baris.innerHTML =
-            "<td>" + pesanan.idPesanan + "</td>" +
-            "<td>" + formatTanggal(pesanan.tanggal) + "</td>" +
-            "<td>" + formatRupiah(pesanan.total) + "</td>" +
-            "<td><span class='status status-" + pesanan.statusPesanan + "'>" + pesanan.statusPesanan + "</span></td>" +
-            "<td>" + pesanan.kodeReferensi + "</td>" +
-            "<td>" + tombolBatal + "</td>";
-        isi.appendChild(baris);
+        const kartu = document.createElement("div");
+        kartu.className = "order-card";
+        kartu.innerHTML =
+            "<div class='order-atas'>" +
+            "  <span class='order-id'>" + pesanan.idPesanan + "</span>" +
+            "  <span class='status status-" + pesanan.statusPesanan + "'>" + pesanan.statusPesanan + "</span>" +
+            "</div>" +
+            "<div class='order-detail'>" +
+            "  <p>" + formatTanggal(pesanan.tanggal) + "</p>" +
+            "  <p>Ref: " + pesanan.kodeReferensi + "</p>" +
+            "</div>" +
+            "<div class='order-bawah'>" +
+            "  <span class='order-total'>" + formatRupiah(pesanan.total) + "</span>" +
+            "  " + tombolBatal +
+            "</div>";
+        wadah.appendChild(kartu);
     });
 }
 
-async function batalkanPesanan(idPesanan) {
-    const alasan = prompt("Masukkan alasan pembatalan pesanan " + idPesanan + ":");
-    if (alasan === null) {
-        return; // user menekan Cancel
-    }
+function bukaDialogBatal(idPesanan) {
+    idYangDibatalkan = idPesanan;
+    document.getElementById("dialog-id").textContent = idPesanan;
+    const inputAlasan = document.getElementById("alasan");
+    inputAlasan.value = "";
+    inputAlasan.placeholder = "contoh: ingin mengganti menu";
+    inputAlasan.classList.remove("input-error");
+    document.getElementById("dialog-batal").showModal();
+}
 
+async function batalkanPesanan(idPesanan, alasan) {
     try {
         const response = await fetch(API_URL + "/" + idPesanan + "/batal", {
             method: "POST",
@@ -250,10 +330,40 @@ async function batalkanPesanan(idPesanan) {
     } catch (error) {
         tampilkanError({ message: "Tidak dapat terhubung ke server. Pastikan backend sudah berjalan." });
     }
+    document.getElementById("checkout").scrollIntoView();
+}
+
+function tutupDialogBatal() {
+    document.getElementById("dialog-batal").close();
+    idYangDibatalkan = null;
+}
+
+// Dipanggil saat tombol "Ya, Batalkan" di popup diklik
+function konfirmasiBatal() {
+    const idPesanan = idYangDibatalkan;
+    const inputAlasan = document.getElementById("alasan");
+    const alasan = inputAlasan.value.trim();
+
+    // Alasan wajib diisi (sesuai validasi di backend)
+    if (alasan === "") {
+        inputAlasan.placeholder = "Alasan wajib diisi";
+        inputAlasan.classList.add("input-error");
+        inputAlasan.focus();
+        return;
+    }
+    inputAlasan.classList.remove("input-error");
+    tutupDialogBatal();
+    if (idPesanan) {
+        batalkanPesanan(idPesanan, alasan);
+    }
 }
 
 // ---------- Jalankan saat halaman dibuka ----------
 
 document.getElementById("form-checkout").addEventListener("submit", prosesCheckout);
-tampilkanMenu();
-tampilkanKeranjang();
+document.getElementById("pilihan-metode").addEventListener("click", pilihMetode);
+document.getElementById("btn-kosongkan").addEventListener("click", kosongkanKeranjang);
+document.getElementById("btn-konfirmasi-batal").addEventListener("click", konfirmasiBatal);
+document.getElementById("btn-tutup-dialog").addEventListener("click", tutupDialogBatal);
+perbaruiTampilan();
+tampilkanRiwayat();

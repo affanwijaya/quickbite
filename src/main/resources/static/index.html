@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuickBite - Checkout</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+    <h1>🍔 QuickBite</h1>
+    <p>Pesan makanan & minuman favoritmu</p>
+</header>
+
+<main>
+    <!-- Kolom kiri: daftar menu -->
+    <section class="card">
+        <h2>Daftar Menu</h2>
+        <div id="daftar-menu"></div>
+    </section>
+
+    <!-- Kolom kanan: keranjang & checkout -->
+    <section class="card">
+        <h2>Keranjang</h2>
+        <div id="keranjang">
+            <p class="kosong">Keranjang masih kosong.</p>
+        </div>
+        <p class="total">Total: <span id="total">Rp0</span></p>
+
+        <h2>Data Pembayaran</h2>
+        <form id="form-checkout">
+            <label for="idPelanggan">ID Pelanggan</label>
+            <input type="text" id="idPelanggan" value="CUST-001">
+
+            <label for="metodePembayaran">Metode Pembayaran</label>
+            <select id="metodePembayaran">
+                <option value="MIDTRANS">Midtrans</option>
+                <option value="CREDIT_CARD">Kartu Kredit</option>
+            </select>
+
+            <label for="tokenKartu">Token Kartu</label>
+            <input type="text" id="tokenKartu" value="tok_visa_valid_999">
+            <small>Coba isi <b>invalid_card</b> untuk mensimulasikan pembayaran ditolak.</small>
+
+            <button type="submit" id="btn-checkout">Checkout</button>
+        </form>
+
+        <div id="pesan"></div>
+    </section>
+</main>
+
+<!-- Riwayat pesanan & pembatalan -->
+<section class="card riwayat">
+    <h2>Pesanan Saya</h2>
+    <p class="kosong" id="riwayat-kosong">Belum ada pesanan.</p>
+    <div class="tabel-wrap">
+    <table id="tabel-riwayat" hidden>
+        <thead>
+        <tr>
+            <th>ID Pesanan</th>
+            <th>Tanggal</th>
+            <th>Total</th>
+            <th>Status</th>
+            <th>Kode Referensi</th>
+            <th>Aksi</th>
+        </tr>
+        </thead>
+        <tbody id="isi-riwayat"></tbody>
+    </table>
+    </div>
+</section>
+
+<footer>
+    <p>QuickBite &copy; 2026 - Praktikum Rekayasa Sistem Informasi</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

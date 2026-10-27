@@ -1,0 +1,31 @@
+server:
+  # Platform hosting (Railway/Render) memberi port lewat variabel PORT
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: ordering-system
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/ordering_db}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:secretpassword}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      # Skema dikelola Flyway (db/migration); Hibernate hanya mengecek kecocokan entity
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+    open-in-view: false
+  flyway:
+    enabled: true
+    # Database lama yang tabelnya sudah dibuat Hibernate dianggap sudah di versi 1
+    baseline-on-migrate: true
+    baseline-version: 1
+
+payment:
+  gateway:
+    endpoint-url: "https://api.mockpayment.com/v1/charge"
+    api-key: "sk_live_sample_secret_key_12345"

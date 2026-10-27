@@ -1,0 +1,17 @@
+# Konfigurasi khusus test: memakai H2 in-memory (mode PostgreSQL) agar test tidak butuh server database
+spring:
+  datasource:
+    url: jdbc:h2:mem:ordering_test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    open-in-view: false
+
+payment:
+  gateway:
+    endpoint-url: "https://api.mockpayment.com/v1/charge"
+    api-key: "sk_test_dummy_key"
